@@ -1,6 +1,6 @@
 {
-    "extends": "./tsconfig.json",
     "compilerOptions": {
+        "target": "es2017",
         "module": "CommonJS",
         "moduleResolution": "node",
         "esModuleInterop": true,
@@ -9,7 +9,13 @@
         "resolveJsonModule": true,
         "strict": true,
         "noImplicitAny": true,
-        "strictNullChecks": true
+        "strictNullChecks": true,
+        "baseUrl": ".",
+        "paths": {
+            "@/*": ["./src/*"]
+        },
+        "skipLibCheck": true
     },
-    "include": ["prisma/**/*"]
+    "include": ["prisma/**/*"],
+    "exclude": ["node_modules"]
 }

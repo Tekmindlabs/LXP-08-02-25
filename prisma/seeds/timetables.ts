@@ -62,7 +62,7 @@ export async function seedTimetables(prisma: PrismaClient, params: TimetablePara
 				});
 			})
 		);
-		timetables.push(...termTimetables.filter(Boolean));
+		timetables.push(...termTimetables.filter((t): t is NonNullable<typeof t> => t !== null));
 	}
 
 	// Create periods for each timetable
@@ -78,6 +78,7 @@ export async function seedTimetables(prisma: PrismaClient, params: TimetablePara
 	];
 
 	for (const timetable of timetables) {
+		if (!timetable) continue; // Add null check
 		// Create periods for Monday to Friday (1-5)
 		for (let dayOfWeek = 1; dayOfWeek <= 5; dayOfWeek++) {
 			await Promise.all(

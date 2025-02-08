@@ -9,7 +9,7 @@ const components = {
 };
 
 export const RoleLayouts: Record<keyof typeof DefaultRoles, DashboardLayoutConfig> = {
-	"SUPER_ADMIN": {
+	[DefaultRoles.SUPER_ADMIN]: {
 		type: "complex",
 		components: [
 			{
@@ -19,7 +19,7 @@ export const RoleLayouts: Record<keyof typeof DefaultRoles, DashboardLayoutConfi
 			}
 		]
 	},
-	"ADMIN": {
+	[DefaultRoles.ADMIN]: {
 		type: "simple",
 		components: [
 			{
@@ -29,19 +29,19 @@ export const RoleLayouts: Record<keyof typeof DefaultRoles, DashboardLayoutConfi
 			}
 		]
 	},
-	"PROGRAM_COORDINATOR": {
+	[DefaultRoles.PROGRAM_COORDINATOR]: {
 		type: "simple",
 		components: []
 	},
-	"TEACHER": {
+	[DefaultRoles.TEACHER]: {
 		type: "simple",
 		components: []
 	},
-	"STUDENT": {
+	[DefaultRoles.STUDENT]: {
 		type: "simple",
 		components: []
 	},
-	"PARENT": {
+	[DefaultRoles.PARENT]: {
 		type: "simple",
 		components: []
 	}

@@ -14,9 +14,9 @@ import { seedAttendance } from './seeds/attendance';
 import { seedSystemSettings } from './seeds/system-settings';
 import { seedBrandingSettings } from './seeds/branding-settings';
 import { seedInstituteSettings } from './seeds/institute-settings';
-import { seedKnowledgeBase } from './seeds/knowledge-base';
 
 const prisma = new PrismaClient();
+
 
 async function main() {
   console.log('Starting database seeding...');
@@ -52,11 +52,8 @@ async function main() {
     console.log('Seeding attendance records...');
     await seedAttendance(prisma);
 
-    // Knowledge base
-    console.log('Seeding knowledge base...');
-    await seedKnowledgeBase(prisma);
-
     console.log('Database seeding completed successfully');
+
   } catch (error) {
     console.error('Error during database seeding:', error);
     throw error;

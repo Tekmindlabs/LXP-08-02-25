@@ -42,11 +42,12 @@ export default withAuth(
 
     // Check role-based access for dashboard routes
     if (isDashboardPage && isAuth) {
-      const urlRole = req.nextUrl.pathname.split('/')[2]; // Get role from URL
+      const urlRole = req.nextUrl.pathname.split('/')[2];
       const userRole = token.roles?.[0];
       
       // Validate if urlRole is a valid role
-      const isValidRole = Object.values(DefaultRoles).includes(urlRole as string);
+      const validRoles = Object.values(DefaultRoles);
+      const isValidRole = validRoles.includes(urlRole as typeof validRoles[number]);
       
       // If accessing a role-specific route that doesn't match user's role or is invalid
       if (urlRole && (urlRole !== userRole || !isValidRole)) {

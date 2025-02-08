@@ -1,4 +1,5 @@
 import { PrismaClient } from '@prisma/client';
+import { seedPermissions } from './permissions';
 import { seedUsers } from './users';
 import { seedCalendar } from './calendar';
 import { seedPrograms } from './programs';
@@ -18,7 +19,12 @@ async function runAllSeeds() {
 		
 		console.time('Total Seeding Time');
 		
-		// Users and roles (required first)
+		// Permissions (required first)
+		console.time('Permissions Seeding');
+		await seedPermissions(prisma);
+		console.timeEnd('Permissions Seeding');
+		
+		// Users and roles
 		console.time('Users Seeding');
 		await seedUsers(prisma);
 		console.timeEnd('Users Seeding');

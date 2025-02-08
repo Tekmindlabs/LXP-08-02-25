@@ -15,6 +15,39 @@ export async function seedUsers(prisma: PrismaClient) {
 	// Create users with profiles
 	const users = [];
 
+	// Super Admin User
+	const superAdminPassword = await bcrypt.hash('superadmin123', 12);
+	users.push(
+		await prisma.user.upsert({
+			where: { email: 'superadmin@school.com' },
+			update: {},
+			create: {
+				name: 'Super Admin',
+				email: 'superadmin@school.com',
+				password: superAdminPassword,
+				userType: UserType.ADMIN,
+				status: Status.ACTIVE,
+				phoneNumber: '+1234567889',
+				emailVerified: new Date(),
+				userRoles: {
+					create: {
+						roleId: roles.find(r => r?.name === DefaultRoles.SUPER_ADMIN)?.id || ''
+					}
+				},
+				notificationSettings: {
+					create: {
+						emailNotifications: true,
+						pushNotifications: true,
+						timetableChanges: true,
+						assignmentUpdates: true,
+						gradeUpdates: true,
+						systemUpdates: true
+					}
+				}
+			}
+		})
+	);
+
 	// Admin Users
 	const adminPassword = await bcrypt.hash('admin123', 12);
 	users.push(

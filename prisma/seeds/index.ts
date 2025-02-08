@@ -1,6 +1,7 @@
 import { PrismaClient } from '@prisma/client';
 import { seedPermissions } from './permissions';
 import { seedUsers } from './users';
+import { seedAcademicYear } from './academic-year';
 import { seedCalendar } from './calendar';
 import { seedPrograms } from './programs';
 import { seedClassGroups } from './class-groups';
@@ -23,8 +24,11 @@ async function seedDemoData() {
 		// Create users and roles
 		await seedUsers(prisma);
 		
+		// Create academic year
+		const academicYear = await seedAcademicYear(prisma);
+		
 		// Create calendar and events
-		const calendar = await seedCalendar(prisma);
+		const calendar = await seedCalendar(prisma, academicYear.id);
 		
 		// Create programs
 		const programs = await seedPrograms(prisma, calendar.id);

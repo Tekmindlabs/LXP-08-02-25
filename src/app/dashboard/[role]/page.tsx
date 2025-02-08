@@ -18,8 +18,13 @@ export default async function DashboardPage({
   const session = await getServerAuthSession();
   const roleParam = await Promise.resolve(params.role);
   
-  // Normalize the role to uppercase and replace hyphens with underscores
-  const normalizedRole = roleParam.toUpperCase().replace(/-/g, '_');
+  // Instead of normalizing to uppercase with underscores, keep it as lowercase with hyphens
+  const normalizedRole = roleParam.toLowerCase();
+
+  // Verify that the normalized role exists in DefaultRoles
+  if (!Object.values(DefaultRoles).includes(normalizedRole)) {
+    redirect('/dashboard/admin'); // Fallback to admin dashboard if role is invalid
+  }
   
   if (!session?.user) {
     redirect('/auth/signin');

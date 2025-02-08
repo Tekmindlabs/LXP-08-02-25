@@ -4,10 +4,8 @@ export async function seedAcademicYear(prisma: PrismaClient) {
 	console.log('Seeding academic year settings and data...');
 
 	// Create academic year settings
-	await prisma.academicYearSettings.upsert({
-		where: { id: 'default-settings' },
-		update: {},
-		create: {
+	const settings = await prisma.academicYearSettings.create({
+		data: {
 			startMonth: 8,  // August
 			startDay: 1,
 			endMonth: 5,   // May
@@ -30,3 +28,4 @@ export async function seedAcademicYear(prisma: PrismaClient) {
 	console.log('Academic year settings and data seeded successfully');
 	return academicYear;
 }
+
