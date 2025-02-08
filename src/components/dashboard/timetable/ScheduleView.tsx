@@ -4,7 +4,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { api } from "@/utils/api";
 import { TeacherProfile, Period, Classroom } from "@prisma/client";
-import { BreakTime } from "@/types/timetable";
+import { BreakTime, ServerBreakTime, normalizeBreakTime } from "@/types/timetable";
 
 interface ScheduleViewProps {
 	type: 'teacher' | 'classroom';
@@ -46,12 +46,13 @@ export function ScheduleView({ type, entityId, termId, breakTimes = [] }: Schedu
 
 	// Merge server and local break times, with local taking precedence
 	const allBreakTimes = [...serverBreakTimes, ...breakTimes].reduce<BreakTime[]>((acc, breakTime) => {
+		const normalizedBreakTime = normalizeBreakTime(breakTime);
 		const exists = acc.some(
-			bt => bt.dayOfWeek === breakTime.dayOfWeek && 
-			bt.startTime === breakTime.startTime && 
-			bt.endTime === breakTime.endTime
+			bt => bt.dayOfWeek === normalizedBreakTime.dayOfWeek && 
+			bt.startTime === normalizedBreakTime.startTime && 
+			bt.endTime === normalizedBreakTime.endTime
 		);
-		if (!exists) acc.push(breakTime);
+		if (!exists) acc.push(normalizedBreakTime);
 		return acc;
 	}, []);
 

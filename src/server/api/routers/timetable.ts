@@ -2,7 +2,42 @@ import { z } from "zod";
 import { TRPCError } from "@trpc/server";
 import { createTRPCRouter, protectedProcedure } from "../trpc";
 import { TimetableService } from "@/server/services/TimetableService";
-import { periodInputSchema, timetableInputSchema, isTimeOverlapping } from "@/types/timetable";
+import { periodInputSchema, timetableInputSchema, isTimeOverlapping, ScheduleConflict } from "@/types/timetable";
+import { Prisma } from "@prisma/client";
+
+// Define the period include type
+const periodWithRelations = Prisma.validator<Prisma.PeriodInclude>()({
+	subject: true,
+	teacher: {
+		include: {
+			user: true
+		}
+	},
+	classroom: true,
+	timetable: {
+		include: {
+			class: true
+		}
+	}
+});
+
+type PeriodWithRelations = Prisma.PeriodGetPayload<{
+	include: typeof periodWithRelations
+}>;
+
+type ScheduleResponse = {
+	periods: PeriodWithRelations[];
+	breakTimes: {
+		id: string;
+		startTime: string;
+		endTime: string;
+		type: string;
+		dayOfWeek: number;
+		timetableId: string;
+		createdAt: Date;
+		updatedAt: Date;
+	}[];
+};
 
 export const timetableRouter = createTRPCRouter({
 	checkAvailability: protectedProcedure
@@ -134,21 +169,16 @@ export const timetableRouter = createTRPCRouter({
 			teacherId: z.string(),
 			termId: z.string()
 		}))
-		.query(async ({ ctx, input }) => {
+		.query(async ({ ctx, input }): Promise<ScheduleResponse> => {
 			try {
-				const timetables = await ctx.prisma.timetable.findMany({
-					where: {
-						termId: input.termId,
-						periods: {
-							some: {
-								teacherId: input.teacherId
-							}
-						}
-					},
-					include: {
-						breakTimes: true
-					}
-				});
+				const timetables = await ctx.prisma.$queryRaw<Array<{ breakTimes: ScheduleResponse['breakTimes'] }>>`
+					SELECT bt.*
+					FROM "break_times" bt
+					JOIN "timetables" t ON t."id" = bt."timetableId"
+					JOIN "periods" p ON p."timetableId" = t."id"
+					WHERE t."termId" = ${input.termId}
+					AND p."teacherId" = ${input.teacherId}
+				`;
 
 				const periods = await ctx.prisma.period.findMany({
 					where: {
@@ -157,20 +187,7 @@ export const timetableRouter = createTRPCRouter({
 							termId: input.termId
 						}
 					},
-					include: {
-						subject: true,
-						classroom: true,
-						teacher: {
-							include: {
-								user: true
-							}
-						},
-						timetable: {
-							include: {
-								class: true
-							}
-						}
-					},
+					include: periodWithRelations,
 					orderBy: [
 						{ dayOfWeek: 'asc' },
 						{ startTime: 'asc' }
@@ -179,7 +196,7 @@ export const timetableRouter = createTRPCRouter({
 
 				return {
 					periods,
-					breakTimes: timetables.flatMap(t => t.breakTimes)
+					breakTimes: timetables[0]?.breakTimes ?? []
 				};
 			} catch (error) {
 				throw new TRPCError({
@@ -190,26 +207,22 @@ export const timetableRouter = createTRPCRouter({
 			}
 		}),
 
+
 	getClassroomSchedule: protectedProcedure
 		.input(z.object({
 			classroomId: z.string(),
 			termId: z.string()
 		}))
-		.query(async ({ ctx, input }) => {
+		.query(async ({ ctx, input }): Promise<ScheduleResponse> => {
 			try {
-				const timetables = await ctx.prisma.timetable.findMany({
-					where: {
-						termId: input.termId,
-						periods: {
-							some: {
-								classroomId: input.classroomId
-							}
-						}
-					},
-					include: {
-						breakTimes: true
-					}
-				});
+				const timetables = await ctx.prisma.$queryRaw<Array<{ breakTimes: ScheduleResponse['breakTimes'] }>>`
+					SELECT bt.*
+					FROM "break_times" bt
+					JOIN "timetables" t ON t."id" = bt."timetableId"
+					JOIN "periods" p ON p."timetableId" = t."id"
+					WHERE t."termId" = ${input.termId}
+					AND p."classroomId" = ${input.classroomId}
+				`;
 
 				const periods = await ctx.prisma.period.findMany({
 					where: {
@@ -218,19 +231,7 @@ export const timetableRouter = createTRPCRouter({
 							termId: input.termId
 						}
 					},
-					include: {
-						subject: true,
-						teacher: {
-							include: {
-								user: true
-							}
-						},
-						timetable: {
-							include: {
-								class: true
-							}
-						}
-					},
+					include: periodWithRelations,
 					orderBy: [
 						{ dayOfWeek: 'asc' },
 						{ startTime: 'asc' }
@@ -239,7 +240,7 @@ export const timetableRouter = createTRPCRouter({
 
 				return {
 					periods,
-					breakTimes: timetables.flatMap(t => t.breakTimes)
+					breakTimes: timetables[0]?.breakTimes ?? []
 				};
 			} catch (error) {
 				throw new TRPCError({
@@ -249,6 +250,7 @@ export const timetableRouter = createTRPCRouter({
 				});
 			}
 		}),
+
 
 
 

@@ -29,6 +29,31 @@ export const timetableInputSchema = z.object({
 });
 
 export type BreakTime = z.infer<typeof breakTimeSchema>;
+
+export interface ServerBreakTime extends Omit<BreakTime, 'type'> {
+	id: string;
+	type: string;
+	timetableId: string;
+	createdAt: Date;
+	updatedAt: Date;
+}
+
+export const isServerBreakTime = (breakTime: BreakTime | ServerBreakTime): breakTime is ServerBreakTime => {
+	return 'id' in breakTime && 'timetableId' in breakTime;
+};
+
+export const normalizeBreakTime = (breakTime: BreakTime | ServerBreakTime): BreakTime => {
+	if (isServerBreakTime(breakTime)) {
+		return {
+			startTime: breakTime.startTime,
+			endTime: breakTime.endTime,
+			type: breakTime.type as "SHORT_BREAK" | "LUNCH_BREAK",
+			dayOfWeek: breakTime.dayOfWeek
+		};
+	}
+	return breakTime;
+};
+
 export type PeriodInput = z.infer<typeof periodInputSchema>;
 export type TimetableInput = z.infer<typeof timetableInputSchema>;
 
