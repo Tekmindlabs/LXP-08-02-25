@@ -1,4 +1,5 @@
 import { PrismaClient } from '@prisma/client';
+import { seedPermissions } from './permissions';
 import { seedUsers } from './users';
 import { seedCalendar } from './calendar';
 import { seedPrograms } from './programs';
@@ -16,7 +17,10 @@ async function seedDemoData() {
 	try {
 		console.log('Starting demo data seeding...');
 		
-		// Create users and roles first as they are required by other entities
+		// Seed permissions and roles first
+		await seedPermissions(prisma);
+		
+		// Create users and roles
 		await seedUsers(prisma);
 		
 		// Create calendar and events
@@ -44,7 +48,7 @@ async function seedDemoData() {
 		await seedTimetables(prisma, { classGroups, classes, subjects, classrooms });
 		
 		// Create activities and resources
-		await seedActivities(prisma, { classes, subjects });
+		await seedActivities(prisma, { classes, subjects, classGroups });
 
 		console.log('Demo data seeding completed successfully');
 	} catch (error) {

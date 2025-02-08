@@ -1,8 +1,35 @@
 import { PrismaClient, UserType, Status } from '@prisma/client';
+import { Permissions, DefaultRoles } from '../../src/utils/permissions';
 
 export async function seedUsers(prisma: PrismaClient) {
 	console.log('Creating demo users...');
 	
+	// Get super admin role
+	const superAdminRole = await prisma.role.findUnique({
+		where: { name: DefaultRoles.SUPER_ADMIN }
+	});
+
+	if (!superAdminRole) {
+		throw new Error('Super admin role not found. Please run permissions seed first.');
+	}
+
+	// Create super admin user
+	await prisma.user.upsert({
+		where: { email: 'superadmin@school.com' },
+		update: {},
+		create: {
+			name: 'Super Admin',
+			email: 'superadmin@school.com',
+			userType: UserType.ADMIN,
+			status: Status.ACTIVE,
+			userRoles: {
+				create: {
+					roleId: superAdminRole.id
+				}
+			}
+		}
+	});
+
 	// Create or get existing roles
 	const roleNames = ['ADMIN', 'TEACHER', 'STUDENT'];
 	const roles = await Promise.all(

@@ -1,30 +1,38 @@
 import { initTRPC, TRPCError } from "@trpc/server";
 import superjson from "superjson";
 import { ZodError } from "zod";
-import { Permission, RolePermissions, DefaultRoles } from "@/utils/permissions";
+import { Permission, DefaultRoles } from "@/utils/permissions";
 import { getServerAuthSession } from "@/server/auth";
 import { prisma } from "@/server/db";
 import type { Session } from "next-auth";
+import { type DefaultSession } from "next-auth";
 
 // Extend Session type to include roles
 declare module "next-auth" {
-  interface Session {
+  interface Session extends DefaultSession {
     user: {
       id: string;
       roles: string[];
-      [key: string]: any;
-    };
+      permissions: string[];
+    } & DefaultSession["user"];
+  }
+
+  interface User {
+    id: string;
+    roles: string[];
+    permissions: string[];
   }
 }
+
 
 export type Context = {
   prisma: typeof prisma;
   session: Session | null;
 };
 
-import type { CreateNextContextOptions } from '@trpc/server/adapters/next';
 
-export const createTRPCContext = async (opts: CreateNextContextOptions) => {
+
+export const createTRPCContext = async () => {
   const session = await getServerAuthSession();
 
   // Ensure we have the user's roles in the session
@@ -144,15 +152,30 @@ const enforceUserHasPermission = (requiredPermission: Permission) =>
       });
     }
 
-    // Get all permissions for the user's roles
-    const userPermissions = ctx.session.user.roles.flatMap(role => {
-      // Check if the role exists in RolePermissions
-      if (role in RolePermissions) {
-        return RolePermissions[role as keyof typeof RolePermissions];
+    // Get user's roles with their permissions from database
+    const userWithRoles = await ctx.prisma.user.findUnique({
+      where: { id: ctx.session.user.id },
+      include: {
+        userRoles: {
+          include: {
+            role: {
+              include: {
+                permissions: {
+                  include: {
+                    permission: true
+                  }
+                }
+              }
+            }
+          }
+        }
       }
-      console.warn(`Unknown role encountered: ${role}`);
-      return [];
     });
+
+    // Extract permissions from roles
+    const userPermissions = userWithRoles?.userRoles.flatMap(
+      userRole => userRole.role.permissions.map(rp => rp.permission.name)
+    ) || [];
 
     console.log('Permission check:', {
       requiredPermission,
