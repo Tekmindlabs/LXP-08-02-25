@@ -15,11 +15,11 @@ export async function seedUsers(prisma: PrismaClient) {
 
 	// Create super admin user
 	await prisma.user.upsert({
-		where: { email: 'superadmin@school.com' },
+		where: { email: 'superadmin@example.com' },
 		update: {},
 		create: {
 			name: 'Super Admin',
-			email: 'superadmin@school.com',
+			email: 'superadmin@example.com',
 			userType: UserType.ADMIN,
 			status: Status.ACTIVE,
 			userRoles: {

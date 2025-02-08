@@ -35,14 +35,21 @@ export type Context = {
 export const createTRPCContext = async () => {
   const session = await getServerAuthSession();
 
-  // Ensure we have the user's roles in the session
   if (session?.user) {
     const userWithRoles = await prisma.user.findUnique({
       where: { id: session.user.id },
       include: {
         userRoles: {
           include: {
-            role: true
+            role: {
+              include: {
+                permissions: {
+                  include: {
+                    permission: true
+                  }
+                }
+              }
+            }
           }
         },
         teacherProfile: true,
@@ -64,29 +71,33 @@ export const createTRPCContext = async () => {
       defaultRole = DefaultRoles.PARENT;
     }
 
-    // Combine explicitly assigned roles with default role
     const assignedRoles = userWithRoles?.userRoles?.map(ur => ur.role.name) || [];
+    const userPermissions = userWithRoles?.userRoles.flatMap(
+      userRole => userRole.role.permissions.map(rp => rp.permission.name)
+    ) || [];
 
-    // If user has super-admin role, keep it exclusive
+    // If user has super-admin role, keep it exclusive and include all permissions
     if (assignedRoles.includes(DefaultRoles.SUPER_ADMIN)) {
       session.user.roles = [DefaultRoles.SUPER_ADMIN];
+      session.user.permissions = userPermissions;
     } else {
       // Combine assigned roles with default role
       session.user.roles = Array.from(new Set([...assignedRoles, defaultRole].filter(Boolean)));
+      session.user.permissions = userPermissions;
       
       // If still no roles assigned and user exists, assign default role based on userType
       if (session.user.roles.length === 0 && userWithRoles) {
-      if (userWithRoles.teacherProfile) {
-        session.user.roles = [DefaultRoles.TEACHER];
-      } else if (userWithRoles.studentProfile) {
-        session.user.roles = [DefaultRoles.STUDENT];
-      } else if (userWithRoles.coordinatorProfile) {
-        session.user.roles = [DefaultRoles.PROGRAM_COORDINATOR];
-      } else if (userWithRoles.parentProfile) {
-        session.user.roles = [DefaultRoles.PARENT];
-      } else {
-        session.user.roles = [DefaultRoles.STUDENT]; // Fallback role
-      }
+        if (userWithRoles.teacherProfile) {
+          session.user.roles = [DefaultRoles.TEACHER];
+        } else if (userWithRoles.studentProfile) {
+          session.user.roles = [DefaultRoles.STUDENT];
+        } else if (userWithRoles.coordinatorProfile) {
+          session.user.roles = [DefaultRoles.PROGRAM_COORDINATOR];
+        } else if (userWithRoles.parentProfile) {
+          session.user.roles = [DefaultRoles.PARENT];
+        } else {
+          session.user.roles = [DefaultRoles.STUDENT]; // Fallback role
+        }
       }
     }
 
@@ -94,11 +105,10 @@ export const createTRPCContext = async () => {
       hasSession: true,
       userId: session.user.id,
       userRoles: session.user.roles,
+      userPermissions: session.user.permissions,
       defaultRole,
       assignedRoles
     });
-
-
   }
 
   return {
@@ -172,6 +182,11 @@ const enforceUserHasPermission = (requiredPermission: Permission) =>
       }
     });
 
+    // Check if user has super-admin role
+    const isSuperAdmin = userWithRoles?.userRoles.some(
+      userRole => userRole.role.name === DefaultRoles.SUPER_ADMIN
+    );
+
     // Extract permissions from roles
     const userPermissions = userWithRoles?.userRoles.flatMap(
       userRole => userRole.role.permissions.map(rp => rp.permission.name)
@@ -179,12 +194,14 @@ const enforceUserHasPermission = (requiredPermission: Permission) =>
 
     console.log('Permission check:', {
       requiredPermission,
-      userRoles: ctx.session.user.roles,
+      userRoles: userWithRoles?.userRoles.map(ur => ur.role.name),
+      isSuperAdmin,
       userPermissions,
-      hasPermission: userPermissions.includes(requiredPermission)
+      hasPermission: isSuperAdmin || userPermissions.includes(requiredPermission)
     });
 
-    if (!userPermissions.includes(requiredPermission)) {
+    // Super admin has all permissions, otherwise check specific permission
+    if (!isSuperAdmin && !userPermissions.includes(requiredPermission)) {
       throw new TRPCError({
         code: 'FORBIDDEN',
         message: 'You do not have permission to access this resource',
