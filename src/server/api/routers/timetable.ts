@@ -2,7 +2,7 @@ import { z } from "zod";
 import { TRPCError } from "@trpc/server";
 import { createTRPCRouter, protectedProcedure } from "../trpc";
 import { TimetableService } from "@/server/services/TimetableService";
-import { periodInputSchema, timetableInputSchema } from "@/types/timetable";
+import { periodInputSchema, timetableInputSchema, isTimeOverlapping } from "@/types/timetable";
 
 export const timetableRouter = createTRPCRouter({
 	checkAvailability: protectedProcedure
@@ -15,16 +15,103 @@ export const timetableRouter = createTRPCRouter({
 			}))
 		}))
 		.mutation(async ({ ctx, input }) => {
-			try {
-				const timetableService = new TimetableService(ctx.prisma);
-				return timetableService.checkAvailability(input.period, input.breakTimes);
-			} catch (error) {
-				throw new TRPCError({
-					code: 'INTERNAL_SERVER_ERROR',
-					message: 'Failed to check availability',
-					cause: error
+			const conflicts: ScheduleConflict[] = [];
+
+			// Check break time conflicts
+			const breakTimeConflict = input.breakTimes.find(breakTime =>
+				breakTime.dayOfWeek === input.period.dayOfWeek &&
+				isTimeOverlapping(
+					input.period.startTime,
+					input.period.endTime,
+					breakTime.startTime,
+					breakTime.endTime
+				)
+			);
+
+			if (breakTimeConflict) {
+				conflicts.push({
+					type: 'BREAK_TIME',
+					details: {
+						startTime: breakTimeConflict.startTime,
+						endTime: breakTimeConflict.endTime,
+						dayOfWeek: breakTimeConflict.dayOfWeek,
+						entityId: 'break'
+					}
 				});
 			}
+
+			// Check teacher availability
+			const teacherConflict = await ctx.prisma.period.findFirst({
+				where: {
+					teacherId: input.period.teacherId,
+					dayOfWeek: input.period.dayOfWeek,
+					OR: [
+						{
+							startTime: { lte: new Date(`1970-01-01T${input.period.endTime}`) },
+							endTime: { gte: new Date(`1970-01-01T${input.period.startTime}`) }
+						}
+					]
+				},
+				include: {
+					timetable: {
+						include: {
+							class: true
+						}
+					}
+				}
+			});
+
+			if (teacherConflict) {
+				conflicts.push({
+					type: 'TEACHER',
+					details: {
+						startTime: teacherConflict.startTime.toTimeString().slice(0, 5),
+						endTime: teacherConflict.endTime.toTimeString().slice(0, 5),
+						dayOfWeek: teacherConflict.dayOfWeek,
+						entityId: teacherConflict.teacherId,
+						additionalInfo: `Class: ${teacherConflict.timetable.class.name}`
+					}
+				});
+			}
+
+			// Check classroom availability
+			const classroomConflict = await ctx.prisma.period.findFirst({
+				where: {
+					classroomId: input.period.classroomId,
+					dayOfWeek: input.period.dayOfWeek,
+					OR: [
+						{
+							startTime: { lte: new Date(`1970-01-01T${input.period.endTime}`) },
+							endTime: { gte: new Date(`1970-01-01T${input.period.startTime}`) }
+						}
+					]
+				},
+				include: {
+					timetable: {
+						include: {
+							class: true
+						}
+					}
+				}
+			});
+
+			if (classroomConflict) {
+				conflicts.push({
+					type: 'CLASSROOM',
+					details: {
+						startTime: classroomConflict.startTime.toTimeString().slice(0, 5),
+						endTime: classroomConflict.endTime.toTimeString().slice(0, 5),
+						dayOfWeek: classroomConflict.dayOfWeek,
+						entityId: classroomConflict.classroomId,
+						additionalInfo: `Class: ${classroomConflict.timetable.class.name}`
+					}
+				});
+			}
+
+			return {
+				isAvailable: conflicts.length === 0,
+				conflicts
+			};
 		}),
 
 	create: protectedProcedure
@@ -49,7 +136,21 @@ export const timetableRouter = createTRPCRouter({
 		}))
 		.query(async ({ ctx, input }) => {
 			try {
-				return ctx.prisma.period.findMany({
+				const timetables = await ctx.prisma.timetable.findMany({
+					where: {
+						termId: input.termId,
+						periods: {
+							some: {
+								teacherId: input.teacherId
+							}
+						}
+					},
+					include: {
+						breakTimes: true
+					}
+				});
+
+				const periods = await ctx.prisma.period.findMany({
 					where: {
 						teacherId: input.teacherId,
 						timetable: {
@@ -75,6 +176,11 @@ export const timetableRouter = createTRPCRouter({
 						{ startTime: 'asc' }
 					]
 				});
+
+				return {
+					periods,
+					breakTimes: timetables.flatMap(t => t.breakTimes)
+				};
 			} catch (error) {
 				throw new TRPCError({
 					code: 'INTERNAL_SERVER_ERROR',
@@ -91,7 +197,21 @@ export const timetableRouter = createTRPCRouter({
 		}))
 		.query(async ({ ctx, input }) => {
 			try {
-				return ctx.prisma.period.findMany({
+				const timetables = await ctx.prisma.timetable.findMany({
+					where: {
+						termId: input.termId,
+						periods: {
+							some: {
+								classroomId: input.classroomId
+							}
+						}
+					},
+					include: {
+						breakTimes: true
+					}
+				});
+
+				const periods = await ctx.prisma.period.findMany({
 					where: {
 						classroomId: input.classroomId,
 						timetable: {
@@ -116,6 +236,11 @@ export const timetableRouter = createTRPCRouter({
 						{ startTime: 'asc' }
 					]
 				});
+
+				return {
+					periods,
+					breakTimes: timetables.flatMap(t => t.breakTimes)
+				};
 			} catch (error) {
 				throw new TRPCError({
 					code: 'INTERNAL_SERVER_ERROR',

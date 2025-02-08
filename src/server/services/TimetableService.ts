@@ -114,6 +114,14 @@ export class TimetableService {
 						teacher: { connect: { id: period.teacherId } },
 						classroom: { connect: { id: period.classroomId } }
 					}))
+				},
+				breakTimes: {
+					create: input.breakTimes.map(breakTime => ({
+						startTime: breakTime.startTime,
+						endTime: breakTime.endTime,
+						type: breakTime.type,
+						dayOfWeek: breakTime.dayOfWeek
+					}))
 				}
 			},
 			include: {
@@ -123,7 +131,8 @@ export class TimetableService {
 						teacher: true,
 						classroom: true
 					}
-				}
+				},
+				breakTimes: true
 			}
 		});
 

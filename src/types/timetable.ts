@@ -21,6 +21,7 @@ export const timetableInputSchema = z.object({
 	termId: z.string(),
 	classGroupId: z.string(),
 	classId: z.string(),
+	academicCalendarId: z.string(),
 	startTime: z.string(), // Daily start time HH:mm
 	endTime: z.string(), // Daily end time HH:mm
 	breakTimes: z.array(breakTimeSchema),
@@ -31,6 +32,20 @@ export type BreakTime = z.infer<typeof breakTimeSchema>;
 export type PeriodInput = z.infer<typeof periodInputSchema>;
 export type TimetableInput = z.infer<typeof timetableInputSchema>;
 
+export interface TimetableWithCalendar extends TimetableInput {
+    academicCalendarId: string;
+    validateAgainstCalendar: () => Promise<boolean>;
+}
+
+export const isTimeOverlapping = (
+    start1: string,
+    end1: string,
+    start2: string,
+    end2: string
+): boolean => {
+    return start1 < end2 && end1 > start2;
+};
+
 export interface ScheduleConflict {
 	type: 'TEACHER' | 'CLASSROOM' | 'BREAK_TIME';
 	details: {
@@ -38,6 +53,7 @@ export interface ScheduleConflict {
 		endTime: string;
 		dayOfWeek: number;
 		entityId: string;
+		additionalInfo?: string;
 	};
 }
 

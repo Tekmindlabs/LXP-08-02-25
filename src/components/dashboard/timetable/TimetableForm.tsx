@@ -1,14 +1,26 @@
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { Button } from "@/components/ui/button";
-import { Form, FormControl, FormField, FormItem, FormLabel } from "@/components/ui/form";
+import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
 import { Input } from "@/components/ui/input";
-import { Select } from "@/components/ui/select";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Card, CardContent } from "@/components/ui/card";
+import { Alert, AlertDescription } from "@/components/ui/alert";
 import { api } from "@/utils/api";
-import { TimetableInput, timetableInputSchema } from "@/types/timetable";
+import { TimetableInput, timetableInputSchema, isTimeOverlapping } from "@/types/timetable";
 import { toast } from "@/hooks/use-toast";
+import { Plus, Trash2, AlertCircle } from "lucide-react";
+import { useState } from "react";
+
+const DAYS = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday"];
+const BREAK_TYPES = [
+	{ value: "SHORT_BREAK", label: "Short Break" },
+	{ value: "LUNCH_BREAK", label: "Lunch Break" }
+];
 
 export function TimetableForm() {
+	const [selectedClassGroupId, setSelectedClassGroupId] = useState<string>("");
+
 	const form = useForm<TimetableInput>({
 		resolver: zodResolver(timetableInputSchema),
 		defaultValues: {
@@ -22,12 +34,76 @@ export function TimetableForm() {
 		}
 	});
 
+	const { data: terms } = api.term.getAll.useQuery();
+	const { data: classGroups } = api.classGroup.list.useQuery();
+	const { data: classes } = api.class.search.useQuery(
+		{ classGroupId: selectedClassGroupId },
+		{ enabled: !!selectedClassGroupId }
+	);
+
+	const validateTimetable = (data: TimetableInput) => {
+		// Validate start/end times
+		if (data.startTime >= data.endTime) {
+			form.setError("endTime", {
+				message: "End time must be after start time"
+			});
+			return false;
+		}
+		
+		// Validate break times
+		const isBreakTimesValid = data.breakTimes.every(breakTime => {
+			const isValid = breakTime.startTime < breakTime.endTime &&
+				breakTime.startTime >= data.startTime &&
+				breakTime.endTime <= data.endTime;
+			
+			if (!isValid) {
+				form.setError(`breakTimes.${data.breakTimes.indexOf(breakTime)}.endTime`, {
+					message: "Break time must be within daily schedule and end after start"
+				});
+			}
+			return isValid;
+		});
+
+		// Check for overlapping break times
+		const hasOverlappingBreaks = data.breakTimes.some((break1, index1) =>
+			data.breakTimes.some((break2, index2) =>
+				index1 !== index2 &&
+				break1.dayOfWeek === break2.dayOfWeek &&
+				isTimeOverlapping(
+					break1.startTime,
+					break1.endTime,
+					break2.startTime,
+					break2.endTime
+				)
+			)
+		);
+
+		if (hasOverlappingBreaks) {
+			toast({
+				title: "Invalid Break Times",
+				description: "Break times cannot overlap on the same day",
+				variant: "destructive"
+			});
+			return false;
+		}
+
+		return isBreakTimesValid;
+	};
+
+	const onSubmit = async (data: TimetableInput) => {
+		if (!validateTimetable(data)) {
+			return;
+		}
+		createTimetable(data);
+	};
+
 	const { mutate: createTimetable } = api.timetable.create.useMutation({
 		onSuccess: () => {
 			toast({
 				title: "Success",
 				description: "Timetable created successfully"
 			});
+			form.reset();
 		},
 		onError: (error) => {
 			toast({
@@ -38,108 +114,247 @@ export function TimetableForm() {
 		}
 	});
 
-	const onSubmit = (data: TimetableInput) => {
-		createTimetable(data);
+	const addBreakTime = () => {
+		const currentBreakTimes = form.getValues("breakTimes") || [];
+		form.setValue("breakTimes", [
+			...currentBreakTimes,
+			{ startTime: "", endTime: "", type: "SHORT_BREAK", dayOfWeek: 1 }
+		]);
+	};
+
+	const removeBreakTime = (index: number) => {
+		const currentBreakTimes = form.getValues("breakTimes") || [];
+		form.setValue("breakTimes", currentBreakTimes.filter((_, i) => i !== index));
 	};
 
 	return (
 		<Form {...form}>
 			<form onSubmit={form.handleSubmit(onSubmit)} className="space-y-6">
-				<div className="grid grid-cols-2 gap-4">
-					<FormField
-						control={form.control}
-						name="startTime"
-						render={({ field }) => (
-							<FormItem>
-								<FormLabel>Daily Start Time</FormLabel>
-								<FormControl>
-									<Input type="time" {...field} />
-								</FormControl>
-							</FormItem>
-						)}
-					/>
-					<FormField
-						control={form.control}
-						name="endTime"
-						render={({ field }) => (
-							<FormItem>
-								<FormLabel>Daily End Time</FormLabel>
-								<FormControl>
-									<Input type="time" {...field} />
-								</FormControl>
-							</FormItem>
-						)}
-					/>
-				</div>
+				<Card>
+					<CardContent className="pt-6">
+						<div className="grid grid-cols-1 gap-4">
+							<FormField
+								control={form.control}
+								name="termId"
+								render={({ field }) => (
+									<FormItem>
+										<FormLabel>Term</FormLabel>
+										<Select value={field.value} onValueChange={field.onChange}>
+											<SelectTrigger>
+												<SelectValue placeholder="Select a term" />
+											</SelectTrigger>
+											<SelectContent>
+												{terms?.map((term) => (
+													<SelectItem key={term.id} value={term.id}>
+														{term.name}
+													</SelectItem>
+												))}
+											</SelectContent>
+										</Select>
+										<FormMessage />
+									</FormItem>
+								)}
+							/>
 
-				<div className="space-y-4">
-					<h3 className="text-lg font-medium">Break Times</h3>
-					{form.watch("breakTimes")?.map((_, index) => (
-						<div key={index} className="grid grid-cols-4 gap-4">
 							<FormField
 								control={form.control}
-								name={`breakTimes.${index}.startTime`}
+								name="classGroupId"
 								render={({ field }) => (
 									<FormItem>
-										<FormLabel>Start Time</FormLabel>
-										<FormControl>
-											<Input type="time" {...field} />
-										</FormControl>
-									</FormItem>
-								)}
-							/>
-							<FormField
-								control={form.control}
-								name={`breakTimes.${index}.endTime`}
-								render={({ field }) => (
-									<FormItem>
-										<FormLabel>End Time</FormLabel>
-										<FormControl>
-											<Input type="time" {...field} />
-										</FormControl>
-									</FormItem>
-								)}
-							/>
-							<FormField
-								control={form.control}
-								name={`breakTimes.${index}.type`}
-								render={({ field }) => (
-									<FormItem>
-										<FormLabel>Type</FormLabel>
-										<Select
-											value={field.value}
-											onValueChange={field.onChange}
+										<FormLabel>Class Group</FormLabel>
+										<Select 
+											value={field.value} 
+											onValueChange={(value) => {
+												field.onChange(value);
+												setSelectedClassGroupId(value);
+											}}
 										>
-											<option value="SHORT_BREAK">Short Break</option>
-											<option value="LUNCH_BREAK">Lunch Break</option>
+											<SelectTrigger>
+												<SelectValue placeholder="Select a class group" />
+											</SelectTrigger>
+											<SelectContent>
+												{classGroups?.map((group: { id: string; name: string }) => (
+													<SelectItem key={group.id} value={group.id}>
+														{group.name}
+													</SelectItem>
+												))}
+											</SelectContent>
 										</Select>
+										<FormMessage />
 									</FormItem>
 								)}
 							/>
+
 							<FormField
 								control={form.control}
-								name={`breakTimes.${index}.dayOfWeek`}
+								name="classId"
 								render={({ field }) => (
 									<FormItem>
-										<FormLabel>Day</FormLabel>
-										<Select
-											value={field.value.toString()}
-											onValueChange={(value) => field.onChange(parseInt(value))}
-										>
-											{[1, 2, 3, 4, 5].map((day) => (
-												<option key={day} value={day}>
-													{["Monday", "Tuesday", "Wednesday", "Thursday", "Friday"][day - 1]}
-												</option>
-											))}
+										<FormLabel>Class</FormLabel>
+										<Select value={field.value} onValueChange={field.onChange}>
+											<SelectTrigger>
+												<SelectValue placeholder="Select a class" />
+											</SelectTrigger>
+											<SelectContent>
+												{classes?.map((class_: { id: string; name: string }) => (
+													<SelectItem key={class_.id} value={class_.id}>
+														{class_.name}
+													</SelectItem>
+												))}
+											</SelectContent>
 										</Select>
+										<FormMessage />
 									</FormItem>
 								)}
 							/>
 						</div>
-					))}
-				</div>
+					</CardContent>
+				</Card>
 
-				<Button type="submit">Create Timetable</Button>
+				<Card>
+					<CardContent className="pt-6">
+						<div className="grid grid-cols-2 gap-4">
+							<FormField
+								control={form.control}
+								name="startTime"
+								render={({ field }) => (
+									<FormItem>
+										<FormLabel>Daily Start Time</FormLabel>
+										<FormControl>
+											<Input type="time" {...field} />
+										</FormControl>
+										<FormMessage />
+									</FormItem>
+								)}
+							/>
+							<FormField
+								control={form.control}
+								name="endTime"
+								render={({ field }) => (
+									<FormItem>
+										<FormLabel>Daily End Time</FormLabel>
+										<FormControl>
+											<Input type="time" {...field} />
+										</FormControl>
+										<FormMessage />
+									</FormItem>
+								)}
+							/>
+						</div>
+					</CardContent>
+				</Card>
+
+				<Card>
+					<CardContent className="pt-6">
+						<div className="space-y-4">
+							<div className="flex justify-between items-center">
+								<h3 className="text-lg font-medium">Break Times</h3>
+								<Button type="button" variant="outline" size="sm" onClick={addBreakTime}>
+									<Plus className="h-4 w-4 mr-2" />
+									Add Break
+								</Button>
+							</div>
+
+							<Alert>
+								<AlertCircle className="h-4 w-4" />
+								<AlertDescription>
+									Break times will be applied to all selected days
+								</AlertDescription>
+							</Alert>
+
+							{form.watch("breakTimes")?.map((_, index) => (
+								<div key={index} className="grid grid-cols-[1fr_1fr_1fr_1fr_auto] gap-4 items-end">
+									<FormField
+										control={form.control}
+										name={`breakTimes.${index}.startTime`}
+										render={({ field }) => (
+											<FormItem>
+												<FormLabel>Start Time</FormLabel>
+												<FormControl>
+													<Input type="time" {...field} />
+												</FormControl>
+												<FormMessage />
+											</FormItem>
+										)}
+									/>
+									<FormField
+										control={form.control}
+										name={`breakTimes.${index}.endTime`}
+										render={({ field }) => (
+											<FormItem>
+												<FormLabel>End Time</FormLabel>
+												<FormControl>
+													<Input type="time" {...field} />
+												</FormControl>
+												<FormMessage />
+											</FormItem>
+										)}
+									/>
+									<FormField
+										control={form.control}
+										name={`breakTimes.${index}.type`}
+										render={({ field }) => (
+											<FormItem>
+												<FormLabel>Type</FormLabel>
+												<Select value={field.value} onValueChange={field.onChange}>
+													<SelectTrigger>
+														<SelectValue />
+													</SelectTrigger>
+													<SelectContent>
+														{BREAK_TYPES.map(type => (
+															<SelectItem key={type.value} value={type.value}>
+																{type.label}
+															</SelectItem>
+														))}
+													</SelectContent>
+												</Select>
+												<FormMessage />
+											</FormItem>
+										)}
+									/>
+									<FormField
+										control={form.control}
+										name={`breakTimes.${index}.dayOfWeek`}
+										render={({ field }) => (
+											<FormItem>
+												<FormLabel>Day</FormLabel>
+												<Select
+													value={field.value.toString()}
+													onValueChange={(value) => field.onChange(parseInt(value))}
+												>
+													<SelectTrigger>
+														<SelectValue />
+													</SelectTrigger>
+													<SelectContent>
+														{DAYS.map((day, i) => (
+															<SelectItem key={i + 1} value={(i + 1).toString()}>
+																{day}
+															</SelectItem>
+														))}
+													</SelectContent>
+												</Select>
+												<FormMessage />
+											</FormItem>
+										)}
+									/>
+									<Button
+										type="button"
+										variant="ghost"
+										size="icon"
+										className="text-destructive"
+										onClick={() => removeBreakTime(index)}
+									>
+										<Trash2 className="h-4 w-4" />
+									</Button>
+								</div>
+							))}
+						</div>
+					</CardContent>
+				</Card>
+
+				<div className="flex justify-end">
+					<Button type="submit">Create Timetable</Button>
+				</div>
 			</form>
 		</Form>
 	);

@@ -502,6 +502,7 @@ model Timetable {
   class        Class      @relation(fields: [classId], references: [id])
   classId      String
   periods      Period[]
+  breakTimes   BreakTime[]
   createdAt    DateTime   @default(now())
   updatedAt    DateTime   @updatedAt
 
@@ -532,6 +533,21 @@ model Period {
   @@index([classroomId])
   @@index([timetableId])
   @@index([teacherId])
+}
+
+model BreakTime {
+  id          String    @id @default(cuid())
+  startTime   String    // HH:mm format
+  endTime     String    // HH:mm format
+  type        String    // SHORT_BREAK or LUNCH_BREAK
+  dayOfWeek   Int       // 1-7 representing Monday-Sunday
+  timetable   Timetable @relation(fields: [timetableId], references: [id], onDelete: Cascade)
+  timetableId String
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  @@unique([timetableId, dayOfWeek, startTime])
+  @@map("break_times")
 }
 
 model Classroom {
