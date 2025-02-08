@@ -96,4 +96,16 @@ export const termRouter = createTRPCRouter({
 				where: { id: input },
 			});
 		}),
+
+	getAll: protectedProcedure
+		.query(async ({ ctx }) => {
+			return ctx.prisma.term.findMany({
+				where: {
+					status: Status.ACTIVE
+				},
+				orderBy: {
+					startDate: 'asc'
+				}
+			});
+		}),
 });

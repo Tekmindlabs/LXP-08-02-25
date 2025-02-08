@@ -1,48 +1,50 @@
-import { DefaultRoles } from "@/utils/permissions";
+import { DefaultRoles, type Role } from "@/utils/permissions";
 import { SystemMetrics } from "../SystemMetrics";
 import { DashboardLayoutConfig } from "@/types/dashboard";
 
-// Import your dashboard components here
 const components = {
 	SystemMetrics,
-	// Add other components as needed
-};
+} as const;
 
-export const RoleLayouts: Record<keyof typeof DefaultRoles, DashboardLayoutConfig> = {
-	[DefaultRoles.SUPER_ADMIN]: {
+type ComponentType = typeof components;
+
+export const RoleLayouts: Record<Role, DashboardLayoutConfig<keyof ComponentType>> = {
+	"super-admin": {
 		type: "complex",
 		components: [
 			{
-				component: SystemMetrics,
+				component: "SystemMetrics",
 				gridArea: "metrics",
 				className: "col-span-full"
 			}
 		]
 	},
-	[DefaultRoles.ADMIN]: {
+	"admin": {
 		type: "simple",
 		components: [
 			{
-				component: SystemMetrics,
+				component: "SystemMetrics",
 				gridArea: "metrics",
 				className: "col-span-full"
 			}
 		]
 	},
-	[DefaultRoles.PROGRAM_COORDINATOR]: {
+	"program_coordinator": {
 		type: "simple",
 		components: []
 	},
-	[DefaultRoles.TEACHER]: {
+	"teacher": {
 		type: "simple",
 		components: []
 	},
-	[DefaultRoles.STUDENT]: {
+	"student": {
 		type: "simple",
 		components: []
 	},
-	[DefaultRoles.PARENT]: {
+	"parent": {
 		type: "simple",
 		components: []
 	}
 };
+
+export const DashboardComponents = components;

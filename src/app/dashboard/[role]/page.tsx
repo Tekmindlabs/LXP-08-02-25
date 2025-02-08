@@ -1,6 +1,6 @@
-import { redirect } from "next/navigation";
+import { redirect, notFound } from "next/navigation";
 import { getServerAuthSession } from "@/server/auth";
-import { DefaultRoles } from "@/utils/permissions";
+import { DefaultRoles, type Role } from "@/utils/permissions";
 import { DashboardContent } from "@/components/dashboard/DashboardContent";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -18,13 +18,13 @@ export default async function DashboardPage({
   const session = await getServerAuthSession();
   const roleParam = await Promise.resolve(params.role);
   
-  // Instead of normalizing to uppercase with underscores, keep it as lowercase with hyphens
-  const normalizedRole = roleParam.toLowerCase();
+  const normalizedRole = roleParam.toLowerCase() as Role;
 
   // Verify that the normalized role exists in DefaultRoles
   if (!Object.values(DefaultRoles).includes(normalizedRole)) {
-    redirect('/dashboard/admin'); // Fallback to admin dashboard if role is invalid
+    notFound();
   }
+
   
   if (!session?.user) {
     redirect('/auth/signin');

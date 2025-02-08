@@ -16,15 +16,15 @@ export type DashboardFeature =
   | 'class-activity-management'
   | 'knowledge-base';
 
-export interface DashboardComponent {
-  component: React.ComponentType<any>;
+export interface DashboardComponent<T = string> {
+  component: T;
   gridArea?: string;
   className?: string;
 }
 
-export interface DashboardLayoutConfig {
+export interface DashboardLayoutConfig<T = string> {
   type: 'complex' | 'simple';
-  components: DashboardComponent[];
+  components: DashboardComponent<T>[];
 }
 
 export type DashboardLayoutType = Record<keyof typeof DefaultRoles, DashboardLayoutConfig>;
