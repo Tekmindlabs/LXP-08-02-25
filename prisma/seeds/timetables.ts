@@ -1,6 +1,12 @@
 import { PrismaClient } from '@prisma/client';
 import { ClassGroup, Class, Subject, Classroom } from '@prisma/client';
 
+const breakTimeSlots = [
+	{ start: '10:15', end: '10:30', type: 'SHORT_BREAK' as const },
+	{ start: '12:45', end: '13:45', type: 'LUNCH_BREAK' as const },
+	{ start: '14:45', end: '15:00', type: 'SHORT_BREAK' as const }
+];
+
 interface TimetableParams {
 	classGroups: ClassGroup[];
 	classes: Class[];
@@ -127,6 +133,45 @@ export async function seedTimetables(prisma: PrismaClient, params: TimetablePara
 		}
 	}
 
-	console.log('Timetables and periods seeded successfully');
+	// Add break times
+	console.log('Creating break times...');
+	for (const timetable of timetables) {
+		if (!timetable) continue;
+
+		for (let dayOfWeek = 1; dayOfWeek <= 5; dayOfWeek++) {
+			await Promise.all(
+				breakTimeSlots.map(async (slot) => {
+					const [startHour, startMinute] = slot.start.split(':').map(Number);
+					const [endHour, endMinute] = slot.end.split(':').map(Number);
+
+					const durationInMinutes = 
+						(endHour * 60 + endMinute) -
+						(startHour * 60 + startMinute);
+
+					await prisma.breakTime.upsert({
+						where: {
+							timetableId_dayOfWeek_startTime: {
+								timetableId: timetable.id,
+								dayOfWeek,
+								startTime: slot.start
+							}
+						},
+						update: {},
+						create: {
+							startTime: slot.start,
+							endTime: slot.end,
+							type: slot.type,
+							dayOfWeek,
+							timetableId: timetable.id
+						}
+					});
+
+
+				})
+			);
+		}
+	}
+
+	console.log('Timetables, periods and break times seeded successfully');
 	return timetables;
 }

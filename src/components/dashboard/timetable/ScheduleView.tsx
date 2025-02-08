@@ -1,10 +1,13 @@
-import { useState, ReactNode } from "react";
+import { useState, ReactNode } from 'react';
 import { Card } from "@/components/ui/card";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { api } from "@/utils/api";
-import { TeacherProfile, Period, Classroom } from "@prisma/client";
-import { BreakTime, ServerBreakTime, normalizeBreakTime } from "@/types/timetable";
+import { TeacherProfile, Period as PrismaPeriod, Classroom } from "@prisma/client";
+import { BreakTime, normalizeBreakTime } from "@/types/timetable";
+import { WeeklyScheduleView } from "./WeeklyScheduleView";
+
+
 
 interface ScheduleViewProps {
 	type: 'teacher' | 'classroom';
@@ -13,7 +16,7 @@ interface ScheduleViewProps {
 	breakTimes?: BreakTime[];
 }
 
-type PeriodWithRelations = Period & {
+type PeriodWithRelations = PrismaPeriod & {
 	subject: { name: string };
 	teacher: TeacherProfile & { 
 		user: { name: string | null } 
@@ -108,15 +111,17 @@ export function ScheduleView({ type, entityId, termId, breakTimes = [] }: Schedu
 	);
 
 	const renderBreakTime = (breakTime: BreakTime): ReactNode => (
-		<Card key={`break-${breakTime.dayOfWeek}-${breakTime.startTime}`} 
-			className="p-3 bg-secondary/10 hover:bg-secondary/20 transition-colors border-l-4 border-l-secondary">
+		<Card 
+			key={`break-${breakTime.dayOfWeek}-${breakTime.startTime}`} 
+			className="p-3 bg-secondary/10 hover:bg-secondary/20 transition-colors border-l-4 border-l-secondary shadow-sm"
+		>
 			<div className="flex justify-between items-start">
 				<div>
 					<div className="text-sm font-semibold text-secondary">
-						{breakTime.type === 'LUNCH_BREAK' ? 'Lunch Break' : 'Break'}
+						{breakTime.type === 'LUNCH_BREAK' ? '🍽️ Lunch Break' : '☕ Break'}
 					</div>
 				</div>
-				<div className="text-xs text-muted-foreground">
+				<div className="text-xs bg-secondary/20 px-2 py-1 rounded-full">
 					{breakTime.startTime} - {breakTime.endTime}
 				</div>
 			</div>
@@ -147,24 +152,34 @@ export function ScheduleView({ type, entityId, termId, breakTimes = [] }: Schedu
 		</div>
 	);
 
-	const renderWeekView = (): ReactNode => (
-		<div className="grid grid-cols-5 gap-4">
-			{DAYS.map((dayName, index) => {
-				const dayBreaks = allBreakTimes.filter(breakItem => breakItem.dayOfWeek === index + 1);
-				return (
-					<div key={dayName} className="space-y-2">
-						<h3 className="text-sm font-semibold text-center pb-2 border-b">{dayName}</h3>
-						<div className="space-y-2">
-							{dayBreaks.map(renderBreakTime)}
-							{periodsByDay?.[index + 1]?.map(renderPeriodCard) ?? (
-								<p className="text-xs text-center text-muted-foreground py-2">No classes</p>
-							)}
-						</div>
-					</div>
-				);
-			})}
-		</div>
-	);
+	const renderWeekView = (): ReactNode => {
+		const typedSchedule = schedule?.map(period => ({
+			...period,
+			subject: { name: period.subject.name },
+			teacher: {
+				...period.teacher,
+				user: {
+					name: period.teacher.user?.name ?? null
+				}
+			},
+			classroom: period.classroom,
+			timetable: {
+				class: {
+					name: period.timetable.class.name
+				}
+			}
+		} as PeriodWithRelations)) ?? [];
+
+		return (
+			<WeeklyScheduleView
+				periods={typedSchedule}
+				breakTimes={allBreakTimes}
+				renderPeriod={renderPeriodCard}
+				renderBreak={renderBreakTime}
+			/>
+		);
+	};
+
 
 	return (
 		<div className="space-y-6">
