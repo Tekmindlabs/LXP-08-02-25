@@ -1,4 +1,61 @@
+import { useState, useEffect } from 'react';
+import { LoadingSpinner } from '@/components/ui/loading-spinner';
+import { Calendar } from '@/components/ui/calendar';
+import { AttendanceDashboard } from './AttendanceDashboard';
+import { AttendanceStats } from './AttendanceStats';
+import { trpc } from '@/utils/trpc';
+import { AttendanceInput, AttendanceStatus, AttendanceStats as AttendanceStatsType, AttendanceTrend } from '@/types/attendance';
 
+export function CombinedAttendanceManagement() {
+  const [selectedDate, setSelectedDate] = useState<Date>(new Date());
+  const [isLoading, setIsLoading] = useState(false);
+  const [attendanceStats, setAttendanceStats] = useState<AttendanceStatsType>({ present: 0, absent: 0, late: 0, excused: 0, total: 0 });
+  const [attendanceTrend, setAttendanceTrend] = useState<AttendanceTrend[]>([]);
+
+  const updateAttendanceMutation = trpc.attendance.updateAttendance.useMutation();
+
+  const getAttendanceStatsQuery = trpc.attendance.getAttendanceStats.useQuery({ date: selectedDate }, { enabled: !!selectedDate });
+  const getAttendanceTrendQuery = trpc.attendance.getAttendanceTrend.useQuery({ date: selectedDate }, { enabled: !!selectedDate });
+
+  useEffect(() => {
+    if (getAttendanceStatsQuery.data) {
+      setAttendanceStats(getAttendanceStatsQuery.data);
+    }
+    if (getAttendanceTrendQuery.data) {
+      setAttendanceTrend(getAttendanceTrendQuery.data);
+    }
+  }, [getAttendanceStatsQuery.data, getAttendanceTrendQuery.data]);
+
+
+  const handleAttendanceUpdate = async (data: AttendanceInput) => {
+    try {
+      setIsLoading(true);
+      await updateAttendanceMutation.mutateAsync(data);
+    } catch (error) {
+      console.error('Error updating attendance:', error);
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  return (
+    <div className="space-y-4">
+      {isLoading && <LoadingSpinner />}
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+        <Calendar
+          selected={selectedDate}
+          onSelect={(date) => date && setSelectedDate(date)}
+        />
+        <AttendanceStats stats={attendanceStats} />
+      </div>
+      <AttendanceDashboard
+        attendanceTrend={attendanceTrend}
+        onAttendanceUpdate={handleAttendanceUpdate}
+        selectedDate={selectedDate}
+      />
+    </div>
+  );
+}
 import { useState, useEffect } from 'react';
 import { TRPCClientErrorBase } from '@trpc/client';
 import { LoadingSpinner } from '@/components/ui/loading-spinner';

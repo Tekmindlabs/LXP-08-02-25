@@ -9,45 +9,23 @@ export enum AttendanceStatus {
 
 export const attendanceSchema = z.object({
   studentId: z.string(),
-  status: z.enum([
-    AttendanceStatus.PRESENT,
-    AttendanceStatus.ABSENT,
-    AttendanceStatus.LATE,
-    AttendanceStatus.EXCUSED
-  ]),
+  status: z.nativeEnum(AttendanceStatus),
   date: z.date(),
-  classId: z.string(),
   notes: z.string().optional()
 });
 
-export type AttendanceRecord = z.infer<typeof attendanceSchema>;
+export type AttendanceInput = z.infer<typeof attendanceSchema>;
 
-export interface AttendanceStatsData {
-  todayStats: {
-    present: number;
-    absent: number;
-    total: number;
-  };
-  weeklyPercentage: number;
-  mostAbsentStudents: Array<{
-    name: string;
-    absences: number;
-  }>;
-  lowAttendanceClasses: Array<{
-    name: string;
-    percentage: number;
-  }>;
+export interface AttendanceStats {
+  present: number;
+  absent: number;
+  late: number;
+  excused: number;
+  total: number;
 }
 
-export interface AttendanceDashboardData {
-  attendanceTrend: Array<{
-    date: string;
-    percentage: number;
-  }>;
-  classAttendance: Array<{
-    className: string;
-    present: number;
-    absent: number;
-    percentage: number;
-  }>;
+export interface AttendanceTrend {
+  date: string;
+  stats: AttendanceStats;
 }
+
