@@ -1,233 +1,75 @@
-import { PrismaClient, UserType, Role, Status } from '@prisma/client';
-import bcrypt from 'bcryptjs';
-import { DefaultRoles, Permissions, RolePermissions } from '../src/utils/permissions';
+import { PrismaClient } from '@prisma/client';
+import { seedPermissions } from './seeds/permissions';
+import { seedUsers } from './seeds/users';
+import { seedAcademicYear } from './seeds/academic-year';
+import { seedCalendar } from './seeds/calendar';
+import { seedPrograms } from './seeds/programs';
+import { seedClassGroups } from './seeds/class-groups';
+import { seedSubjects } from './seeds/subjects';
+import { seedClasses } from './seeds/classes';
+import { seedClassrooms } from './seeds/classrooms';
+import { seedTimetables } from './seeds/timetables';
+import { seedActivities } from './seeds/activities';
+import { seedAttendance } from './seeds/attendance';
+import { seedSystemSettings } from './seeds/system-settings';
+import { seedBrandingSettings } from './seeds/branding-settings';
+import { seedInstituteSettings } from './seeds/institute-settings';
+import { seedKnowledgeBase } from './seeds/knowledge-base';
 
 const prisma = new PrismaClient();
 
 async function main() {
-  // Create permissions first
-  const permissions = await Promise.all(
-    Object.values(Permissions).map(permission =>
-      prisma.permission.upsert({
-        where: { name: permission },
-        update: {},
-        create: {
-          name: permission,
-          description: `Permission to ${permission.replace(':', ' ')}`
-        }
-      })
-    )
-  );
+  console.log('Starting database seeding...');
+  
+  try {
+    // Core system settings
+    console.log('Seeding system settings...');
+    await seedSystemSettings(prisma);
+    await seedBrandingSettings(prisma);
+    await seedInstituteSettings(prisma);
 
-  // Create roles with their permissions
-  const roles = await Promise.all([
-    prisma.role.upsert({
-      where: { name: DefaultRoles.SUPER_ADMIN },
-      update: {},
-      create: {
-        name: DefaultRoles.SUPER_ADMIN,
-        description: 'Super Administrator with full access',
-      },
-    }),
-    prisma.role.upsert({
-      where: { name: DefaultRoles.ADMIN },
-      update: {},
-      create: {
-        name: DefaultRoles.ADMIN,
-        description: 'Administrator with elevated access',
-      },
-    }),
-    prisma.role.upsert({
-      where: { name: DefaultRoles.PROGRAM_COORDINATOR },
-      update: {},
-      create: {
-        name: DefaultRoles.PROGRAM_COORDINATOR,
-        description: 'Program Coordinator role',
-      },
-    }),
-    prisma.role.upsert({
-      where: { name: DefaultRoles.TEACHER },
-      update: {},
-      create: {
-        name: DefaultRoles.TEACHER,
-        description: 'Teacher role',
-      },
-    }),
-    prisma.role.upsert({
-      where: { name: DefaultRoles.STUDENT },
-      update: {},
-      create: {
-        name: DefaultRoles.STUDENT,
-        description: 'Student role',
-      },
-    }),
-    prisma.role.upsert({
-      where: { name: DefaultRoles.PARENT },
-      update: {},
-      create: {
-        name: DefaultRoles.PARENT,
-        description: 'Parent role',
-      },
-    }),
-  ]);
+    // Core permissions and users
+    console.log('Seeding permissions and users...');
+    await seedPermissions(prisma);
+    const users = await seedUsers(prisma);
 
-  // Assign permissions to roles
-  for (const role of roles) {
-    const rolePermissions = RolePermissions[role.name as keyof typeof RolePermissions] || [];
-    await Promise.all(
-      rolePermissions.map(permissionName =>
-        prisma.rolePermission.upsert({
-          where: {
-            roleId_permissionId: {
-              roleId: role.id,
-              permissionId: permissions.find(p => p.name === permissionName)?.id || '',
-            }
-          },
-          update: {},
-          create: {
-            roleId: role.id,
-            permissionId: permissions.find(p => p.name === permissionName)?.id || '',
-          }
-        })
-      )
-    );
+    // Academic structure
+    console.log('Seeding academic structure...');
+    const academicYear = await seedAcademicYear(prisma);
+    const calendar = await seedCalendar(prisma, academicYear.id);
+    const programs = await seedPrograms(prisma, calendar.id);
+    const classGroups = await seedClassGroups(prisma, programs);
+    const subjects = await seedSubjects(prisma, classGroups);
+    const classes = await seedClasses(prisma, classGroups);
+    const classrooms = await seedClassrooms(prisma);
+
+    // Timetables and activities
+    console.log('Seeding timetables and activities...');
+    await seedTimetables(prisma, { classGroups, classes, subjects, classrooms });
+    await seedActivities(prisma, { classes, subjects, classGroups });
+
+    // Attendance records
+    console.log('Seeding attendance records...');
+    await seedAttendance(prisma);
+
+    // Knowledge base
+    console.log('Seeding knowledge base...');
+    await seedKnowledgeBase(prisma);
+
+    console.log('Database seeding completed successfully');
+  } catch (error) {
+    console.error('Error during database seeding:', error);
+    throw error;
   }
-
-  const demoUsers = [
-    {
-      email: 'superadmin@example.com',
-      password: 'superadmin123',
-      name: 'Super Admin',
-      role: DefaultRoles.SUPER_ADMIN,
-      userType: UserType.ADMIN,
-      status: Status.ACTIVE,
-    },
-    {
-      email: 'admin@example.com',
-      password: 'admin123',
-      name: 'Admin',
-      role: DefaultRoles.ADMIN,
-      userType: UserType.ADMIN,
-      status: Status.ACTIVE,
-    },
-    {
-      email: 'coordinator@example.com',
-      password: 'coordinator123',
-      name: 'Program Coordinator',
-      role: DefaultRoles.PROGRAM_COORDINATOR,
-      userType: UserType.COORDINATOR,
-      status: Status.ACTIVE,
-    },
-    {
-      email: 'teacher@example.com',
-      password: 'teacher123',
-      name: 'Teacher',
-      role: DefaultRoles.TEACHER,
-      userType: UserType.TEACHER,
-      status: Status.ACTIVE,
-    },
-    {
-      email: 'student@example.com',
-      password: 'student123',
-      name: 'Student',
-      role: DefaultRoles.STUDENT,
-      userType: UserType.STUDENT,
-      status: Status.ACTIVE,
-    },
-    {
-      email: 'parent@example.com',
-      password: 'parent123',
-      name: 'Parent',
-      role: DefaultRoles.PARENT,
-      userType: UserType.PARENT,
-      status: Status.ACTIVE,
-    },
-  ] as const;
-
-  for (const demoUser of demoUsers) {
-    const hashedPassword = await bcrypt.hash(demoUser.password, 12);
-    const role = roles.find((r: Role) => r.name === demoUser.role);
-
-    if (!role) {
-      console.log(`Role not found for user: ${demoUser.email}`);
-      continue;
-    }
-
-    const user = await prisma.user.upsert({
-      where: { email: demoUser.email },
-      update: {},
-      create: {
-      email: demoUser.email,
-      name: demoUser.name,
-      password: hashedPassword,
-      status: demoUser.status,
-      userType: demoUser.userType,
-      phoneNumber: null, // Add phoneNumber field
-      userRoles: {
-        create: {
-        roleId: role.id,
-        },
-      },
-      },
-      include: {
-      userRoles: {
-        include: {
-        role: true,
-        },
-      },
-      },
-    });
-
-    switch (demoUser.role) {
-      case DefaultRoles.TEACHER:
-        await prisma.teacherProfile.upsert({
-          where: { userId: user.id },
-          update: { specialization: 'General' },
-          create: {
-            userId: user.id,
-            specialization: 'General',
-          },
-        });
-        break;
-      case DefaultRoles.STUDENT:
-        await prisma.studentProfile.upsert({
-          where: { userId: user.id },
-          update: {},
-          create: {
-            userId: user.id,
-          },
-        });
-        break;
-      case DefaultRoles.PARENT:
-        await prisma.parentProfile.upsert({
-          where: { userId: user.id },
-          update: {},
-          create: {
-            userId: user.id,
-          },
-        });
-        break;
-      case DefaultRoles.PROGRAM_COORDINATOR:
-        await prisma.coordinatorProfile.upsert({
-          where: { userId: user.id },
-          update: {},
-          create: {
-            userId: user.id,
-          },
-        });
-        break;
-    }
-  }
-
-  console.log('Seed completed successfully');
 }
 
 main()
   .catch((e) => {
-    console.error('Error while seeding:', e);
+    console.error('Fatal error during seeding:', e);
     process.exit(1);
   })
   .finally(async () => {
     await prisma.$disconnect();
   });
+
 
